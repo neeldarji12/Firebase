@@ -1,76 +1,123 @@
-import { useState } from "react";
-import {
-  getAuth,
-  createUserWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithPopup,
-} from "firebase/auth";
-import { app } from "../Firebase";
+import React, { useEffect, useState } from 'react';
+import { getDatabase, onValue, ref, push, set, remove, update } from "firebase/database";
+import { app } from '../Firebase';
 
-const auth = getAuth(app);
-const googleProvider = new GoogleAuthProvider();
+const database = getDatabase(app);
 
-export default function Sign() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+export default function Firebasedb() {
+    const [users, setUsers] = useState([]);
+    const [form, setForm] = useState({
+        username: "",
+        email: ""
+    });
+    const [editId, setEditId] = useState(null); 
 
-  // Email & Password Register
-  const registerUser = async () => {
-    if (!email || !password) {
-      alert("Email aur Password dono bharo");
-      return;
+    useEffect(() => {
+        const usersRef = ref(database, 'users/neel');
+        onValue(usersRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const userList = Object.entries(data).map(([id, value]) => ({
+                    id,
+                    ...value
+                }));
+                setUsers(userList);
+            } else {
+                setUsers([]);
+            }
+        });
+    }, []);
+
+    function handleChange(e) {
+        setForm({
+            ...form,
+            [e.target.name]: e.target.value
+        });
     }
 
-    try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-      console.log(userCredential.user);
-      alert("Register Success ✅");
-    } catch (error) {
-      console.error(error.message);
-      alert(error.message);
+    function sendData() {
+        if (editId) {
+            const userRef = ref(database, `users/aryan/${editId}`);
+            update(userRef, {
+                username: form.username,
+                email: form.email,
+            })
+                .then(() => {
+                    console.log("User updated successfully!");
+                    setForm({ username: "", email: "" });
+                    setEditId(null);
+                })
+                .catch((error) => {
+                    console.log(error);
+                });
+
+        } else {
+            const usersRef = ref(database, 'users/aryan');
+            const newUserRef = push(usersRef);
+            set(newUserRef, {
+                username: form.username,
+                email: form.email,
+            })
+                .then(() => {
+                    console.log("User added successfully!");
+                    setForm({ username: "", email: "" });
+                })
+                .catch((error) => {
+                    console.log(error);
+                });
+        }
     }
-  };
 
-  // Google Sign In
-  const signupWithGoogle = async () => {
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      console.log(result.user);
-      alert("Google Login Success ✅");
-    } catch (error) {
-      console.error(error.message);
-      alert(error.message);
+    function deleteUser(id) {
+        const userRef = ref(database, `users/aryan/${id}`);
+        remove(userRef)
+            .then(() => {
+                console.log("User deleted successfully!");
+            })
+            .catch((error) => {
+                console.log(error);
+            });
     }
-  };
 
-  return (
-    <div style={{ padding: "20px" }}>
-      <h1>Register</h1>
+    function editUser(user) {
+        setForm({ username: user.username, email: user.email });
+        setEditId(user.id);
+    }
 
-      <input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <br /><br />
+    return (
+        <div>
+            <h1>Firebase Realtime Database</h1>
 
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <br /><br />
+            <input
+                type="text"
+                name="username"
+                placeholder="Enter Username"
+                value={form.username}
+                onChange={handleChange}
+            />
+            <br /><br />
+            <input
+                type="email"
+                name="email"
+                placeholder="Enter Email"
+                value={form.email}
+                onChange={handleChange}
+            />
+            <br /><br />
 
-      <button onClick={registerUser}>Register</button>
-      <br /><br />
-
-      <button onClick={signupWithGoogle}>Sign in with Google</button>
-    </div>
-  );
+            <button onClick={sendData}>{editId ? "Update User" : "Add User"}</button>
+            <hr />
+            <h2>All Users:</h2>
+            <ul>
+                {users.map((user) => (
+                    <li key={user.id}>
+                        {user.username} - {user.email} &nbsp;
+                        <button onClick={() => editUser(user)}>Edit</button>
+                        <button onClick={() => deleteUser(user.id)}>Delete</button><br />
+                        <hr />
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
 }
